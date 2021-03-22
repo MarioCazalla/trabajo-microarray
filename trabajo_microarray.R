@@ -1,5 +1,5 @@
 ### Establecer directorio de trabajo y cargar librerias
-setwd("/home/guille/Desktop/Omics/microarrays/Trabajo_final/")
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/")
 
 library(affy)
 library(limma)
@@ -18,49 +18,75 @@ library(stringr)
 
 #2. Import targets.txt file. generates a data frame:
 targets <- readTargets("targets.txt", row.names="FileName")
+targets.kopt <- readTargets("targets_kopt.txt", row.names="FileName")
+targets.hpb <- readTargets("targets_hpb.txt", row.names="FileName")
 
 #3. Import .CEL files
 data <- ReadAffy(filenames=targets$FileName)
+data.kopt <- ReadAffy(filenames=targets.kopt$FileName)
+data.hpb <- ReadAffy(filenames=targets.hpb$FileName)
 
-#4. Normalize with RMA 
-eset <- expresso(data,
-                 bg.correct = TRUE, 
-                 bgcorrect.method="rma",
-                 normalize = TRUE, 
-                 normalize.method="quantiles", 
-                 pmcorrect.method="pmonly", 
-                 summary.method="medianpolish",
-                 verbose = TRUE,
-)
+
+#4. Normalize with RMA
+normalize.data <- function(affybatch){
+  expresso(affybatch,
+           bg.correct = TRUE, 
+           bgcorrect.method="rma",
+           normalize = TRUE, 
+           normalize.method="quantiles", 
+           pmcorrect.method="pmonly", 
+           summary.method="medianpolish",
+           verbose = TRUE)
+}
+
+eset <- normalize.data(data)
+eset.kopt <- normalize.data(data.kopt)
+eset.hpb <- normalize.data(data.hpb)
 
 ematrix <- exprs(eset)
-colnames(ematrix)<-c(rep("KOPT_K1_DMSO",3), rep("HPB_ALL_DMSO",3),
-                     rep("KOPT_K1_SAHM1",3), rep("HPB_ALL_SAHM1",3))
+ematrix.kopt <- exprs(eset.kopt)
+ematrix.hpb <- exprs(eset.hpb)
+
+esetpd <- pData(eset)
+esetpd.kopt <- pData(eset.kopt)
+esetpd.hpb <- pData(eset.hpb)
+
+labels<-c(rep("KOPT_K1_DMSO",3), rep("HPB_ALL_DMSO",3),
+          rep("KOPT_K1_SAHM1",3), rep("HPB_ALL_SAHM1",3))
+labels.kopt <- c(rep("KOPT_K1_DMSO",3), rep("KOPT_K1_SAHM1",3))
+labels.hpb <- c(rep("HPB_ALL_DMSO",3), rep("HPB_ALL_SAHM1",3))
+
+colnames(ematrix) <- labels
+colnames(ematrix.kopt) <- labels.kopt
+colnames(ematrix.hpb) <- labels.hpb
+rm(labels, labels.hpb, labels.kopt)
 
 #Filtering:
-esetIQR <- varFilter(eset, var.func=IQR, var.cutoff=0.5, filterByQuantile=TRUE)
+iqr.filtering <- function(expressionset){
+  filtered <- varFilter(expressionset, var.func=IQR, var.cutoff=0.5, filterByQuantile=TRUE)
+  return(filtered)
+}
+esetIQR <- iqr.filtering(eset)
+esetIQR.kopt <- iqr.filtering(eset.kopt)
+esetIQR.hpb <- iqr.filtering(eset.hpb)
 
 ###### PCA analysis ######
 
 library(PCAtools)
-esetpd <- pData(eset)
-ematrix_pca <- exprs(eset)
-pca1 <- pca(ematrix_pca, metadata = esetpd)
 
-labels <- c()
-for (label in c("KOPT_K1-C", "HPB_ALL-C", "KOPT_K1-T", "HPB_ALL-T" )){
-  labels <- c(labels, rep(label,3))
+pca <- pca(ematrix, metadata = esetpd)
+pca.kopt <- pca(ematrix.kopt, metadata = esetpd.kopt)
+pca.hpb <- pca(ematrix.hpb, metadata = esetpd.hpb)
+a <- list(pca, pca.kopt, pca.hpb)
+
+for(i in a){
+  jpeg(paste("figuras/",deparse(substitute(i)),"_screeplot.jpg", sep = ""), width = 600, height = 600)
+  screeplot(i)
+  dev.off()
+  jpeg(paste("figuras/",deparse(substitute(i)),"_plot.jpg", sep = ""), width = 600, height = 600)
+  biplot(pca1, lab = labels)
+  dev.off()
 }
-
-dir.create("./figuras/", showWarnings = FALSE)
-
-jpeg("figuras/pca_screeplot.jpg", width = 600, height = 600)
-screeplot(pca1)
-dev.off()
-
-jpeg("figuras/pca_plot.jpg", width = 600, height = 600)
-biplot(pca1, lab = labels)
-dev.off()
 
 
 
