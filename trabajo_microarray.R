@@ -56,10 +56,10 @@ labels<-c(rep("KOPT_K1_DMSO",3), rep("HPB_ALL_DMSO",3),
 labels.kopt <- c(rep("KOPT_K1_DMSO",3), rep("KOPT_K1_SAHM1",3))
 labels.hpb <- c(rep("HPB_ALL_DMSO",3), rep("HPB_ALL_SAHM1",3))
 
-colnames(ematrix) <- labels
-colnames(ematrix.kopt) <- labels.kopt
-colnames(ematrix.hpb) <- labels.hpb
-rm(labels, labels.hpb, labels.kopt)
+#colnames(ematrix) <- labels
+#colnames(ematrix.kopt) <- labels.kopt
+#colnames(ematrix.hpb) <- labels.hpb
+rm(labels.hpb, labels.kopt)
 
 #Filtering:
 iqr.filtering <- function(expressionset){
@@ -77,123 +77,107 @@ library(PCAtools)
 pca <- pca(ematrix, metadata = esetpd)
 pca.kopt <- pca(ematrix.kopt, metadata = esetpd.kopt)
 pca.hpb <- pca(ematrix.hpb, metadata = esetpd.hpb)
-a <- list(pca, pca.kopt, pca.hpb)
 
-for(i in a){
-  jpeg(paste("figuras/",deparse(substitute(i)),"_screeplot.jpg", sep = ""), width = 600, height = 600)
-  screeplot(i)
+get.pca.plots <- function(pcaobj){
+  
+  jpeg(paste("figuras/",as.character(deparse(substitute(pcaobj))),"_screeplot.jpg", sep = ""), width = 600, height = 600)
+  print(screeplot(pcaobj))
   dev.off()
-  jpeg(paste("figuras/",deparse(substitute(i)),"_plot.jpg", sep = ""), width = 600, height = 600)
-  biplot(pca1, lab = labels)
+
+  jpeg(paste("figuras/",as.character(deparse(substitute(pcaobj))),"_plot.jpg", sep = ""), width = 600, height = 600)
+  print(biplot(pcaobj, lab = labels))
   dev.off()
 }
 
-
+get.pca.plots(pca)
+get.pca.plots(pca.kopt)
+get.pca.plots(pca.hpb)
+rm(pca, pca.hpb, pca.kopt)
 
 #5. Generate BOXPLOTS before and after normalization
 
-#boxplot for raw data
-jpeg("figuras/boxplot_not_normalised.jpg", width = 600, height = 600)
-boxplot(data,
-        main="Boxplot Before Normalization",
-        col = "lightgrey",
-        las=2)
-dev.off()
+get.boxplots <- function(eset, data){
+  
+  jpeg(paste("figuras/boxplot_", as.character(deparse(substitute(data))), "_not_normalised.jpg", sep = ""), width = 600, height = 600)
+  boxplot(data,
+          main="Boxplot Before Normalization",
+          col = "lightgrey",
+          las=2)
+  dev.off()
+  
+  exprseset <- as.data.frame(exprs(eset))
+  
+  jpeg(paste("figuras/boxplot_", as.character(deparse(substitute(eset))), "_normalised.jpg", sep = ""), width = 600, height = 600)
+  boxplot(data.frame(exprseset),
+          main="Boxplot After Normalization (log scale)",
+          col = "white",
+          las=2)
+  dev.off()
+}
 
-#boxplot for normalized data
-exprseset <- as.data.frame(exprs(eset))		
-
-jpeg("figuras/boxplot_normalised.jpg", width = 600, height = 600)
-boxplot(data.frame(exprseset),
-        main="Boxplot After Normalization (log scale)",
-        col = "white",
-        las=2)
-dev.off()
-rm(exprseset)
+get.boxplots(eset, data)
+get.boxplots(eset.kopt, data.kopt)
+get.boxplots(eset.hpb, data.hpb)
+rm(data, data.hpb, data.kopt)
 
 
 #######Differential expression analysis.#######
 
 #7. Design matrix.
-# Para el análisis conjunto por bloques:
-cell_type_blocking <- factor(targets$CellType)
-treat_blocking <- factor(targets$Treatment)
-design_blocking <- model.matrix(~cell_type_blocking+treat_blocking)
-rownames(design_blocking)<-targets$FileName
+# Para el análisis con tipo celular como covariable:
+cell.type.cov <- factor(targets$CellType)
+treat.cov <- factor(targets$Treatment)
+design.cov <- model.matrix(~cell.type.cov+treat.cov)
+rownames(design.cov)<-targets$FileName
+
+rm(cell.type.cov, treat.cov)
 
 # Para el análisis de líneas celulares por separado y comparando ambas:
-design<-cbind(KOPT_K1_DMSO=c(1,1,1,0,0,0,0,0,0,0,0,0),
-              HPB_ALL_DMSO=c(0,0,0,1,1,1,0,0,0,0,0,0),
-              KOPT_K1_SAHM1=c(0,0,0,0,0,0,1,1,1,0,0,0),
-              HPB_ALL_SAHM1=c(0,0,0,0,0,0,0,0,0,1,1,1)
-)
+design.kopt <- cbind(KOPT_K1_DMSO=c(1,1,1,0,0,0),
+                     KOPT_K1_SAHM1=c(0,0,0,1,1,1))
+rownames(design.kopt) <- targets.kopt$FileName
 
-rownames(design)<-targets$FileName
+design.hpb <- cbind(HPB_ALL_DMSO=c(1,1,1,0,0,0),
+                    HPB_ALL_SAHM1=c(0,0,0,1,1,1))
+rownames(design.hpb) <- targets.hpb$FileName
+
 
 #8. Contrasts matrix.
-#Cambios en la expresion diferentes en las lineas celulares
-cont.matrix_lines<-makeContrasts((KOPT_K1_SAHM1 - KOPT_K1_DMSO) - (HPB_ALL_SAHM1 - HPB_ALL_DMSO), levels=design)
-cont.matrix_kopt<-makeContrasts(KOPT_K1_SAHM1 - KOPT_K1_DMSO, levels=design)
-cont.matrix_hpb<-makeContrasts(HPB_ALL_SAHM1 - HPB_ALL_DMSO, levels=design)
+#Sólo necesarias para las líneas celulares analizadas por separado
+cont.matrix.kopt <- makeContrasts(KOPT_K1_SAHM1 - KOPT_K1_DMSO, levels=design.kopt)
+cont.matrix.hpb <- makeContrasts(HPB_ALL_SAHM1 - HPB_ALL_DMSO, levels=design.hpb)
 
 
 #9. Obtaining differentially expressed genes (DEGs)
-# Primero para el analisis por bloques:
-fit<-lmFit(esetIQR, design_blocking)
-fit2<-eBayes(fit)
-toptableIQR_blocking<-topTable(fit2, coef="treat_blockingSAHM1", number=dim(exprs(esetIQR))[1], adjust.method="BH", sort.by="p")
-toptableIQR_blocking_nsig <- nrow(toptableIQR_blocking[toptableIQR_blocking$adj.P.Val<0.05, ])
-rm(fit); rm(fit2)
+# Primero para el analisis con covariable:
+fit<-lmFit(esetIQR, design.cov)
+fit<-eBayes(fit)
+toptableIQR.cov<-topTable(fit, coef="treat.covSAHM1", number=dim(exprs(esetIQR))[1], adjust.method="BH", sort.by="p")
+toptableIQR.cov.nsig <- nrow(toptableIQR.cov[toptableIQR.cov$adj.P.Val<0.05, ])
+rm(fit)
 
-deg <- function(expression_set, design_matrix, contrasts_matrix){
+#Ahora hacemos una función para las líneas por separado
+generateToptable <- function(expression_set, design_matrix, contrasts_matrix){
   fit<-lmFit(expression_set,design_matrix) 
-  fit2<-contrasts.fit(fit, contrasts_matrix)
-  fit2<-eBayes(fit2)
-  toptable <- topTable(fit2, number=dim(exprs(expression_set))[1], adjust.method="BH", sort.by="p")
+  fit<-contrasts.fit(fit, contrasts_matrix)
+  fit<-eBayes(fit)
+  toptable <- topTable(fit, number=dim(exprs(expression_set))[1],
+                       adjust.method="BH", sort.by="p")
   significant_results <- nrow(toptable[toptable$adj.P.Val<0.05, ])
   
-  results<-list(toptable, significant_results)
+  results <- list(toptable, significant_results)
   return(results)
 }
 
-res_lines <- deg(esetIQR, design, cont.matrix_lines)
-toptableIQR_lines <- res_lines[[1]]
-toptableIQR_lines_nsig <- res_lines[[2]]
-rm(res_lines)
+res.kopt <- generateToptable(esetIQR.kopt, design.kopt, cont.matrix.kopt)
+toptableIQR.kopt <- res.kopt[[1]]
+toptableIQR.kopt.nsig <- res.kopt[[2]]
+rm(res.kopt)
 
-res_kopt <- deg(esetIQR, design, cont.matrix_kopt)
-toptableIQR_kopt <- res_kopt[[1]]
-toptableIQR_kopt_nsig <- res_kopt[[2]]
-rm(res_kopt)
-
-res_hpb <- deg(esetIQR, design, cont.matrix_hpb)
-toptableIQR_hpb <- res_hpb[[1]]
-toptableIQR_hpb_nsig <- res_hpb[[2]]
-rm(res_hpb)
-
-#Ver cuantos cambios significativos son mayores/menores en KOPT-K1 que en HPB-ALL
-toptableIQR_lines$sign <- sign(toptableIQR_lines$logFC)
-toptableIQR_lines_filtered <- toptableIQR_lines[toptableIQR_lines$adj.P.Val<=0.05,]
-sign_count_lines=table(toptableIQR_lines_filtered$sign)
-sign_count_lines
-rm(toptableIQR_lines_filtered)
-toptableIQR_lines$sign <-NULL
-
-# Comparar los analisis independientes kopt y hpb:
-toptableIQR_kopt_sig <- toptableIQR_kopt[toptableIQR_kopt$adj.P.Val<=0.05,]
-toptableIQR_hpb_sig <- toptableIQR_hpb[toptableIQR_hpb$adj.P.Val<=0.05,]
-a <- rownames(toptableIQR_kopt_sig)
-b <- rownames(toptableIQR_hpb_sig)
-
-intersect_kopt_hpb <- intersect(a, b)
-length(intersect_kopt_hpb) # prints '1110'
-rm(a); rm(b)
-toptableIQR_hpb_nsig - length(intersect_kopt_hpb) # prints '1717'
-toptableIQR_kopt_nsig - length(intersect_kopt_hpb) # prints '6289'
-
-##10. Save results
-#save(toptableIQR,file="CellLinesResults.RData")
-#load("/home/guille/Desktop/Omics/microarrays/Trabajo_final/CellLinesResults.RData")
+res.hpb <- generateToptable(esetIQR.hpb, design.hpb, cont.matrix.hpb)
+toptableIQR.hpb <- res.hpb[[1]]
+toptableIQR.hpb.nsig <- res.hpb[[2]]
+rm(res.hpb)
 
 ######Anotación######
 
@@ -214,13 +198,31 @@ anno <- function(toptable){
   return(toptable)
 }
 
-toptableIQR_blocking <- anno(toptableIQR_blocking)
-toptableIQR_lines <- anno(toptableIQR_lines)
-toptableIQR_kopt <- anno(toptableIQR_kopt)
-toptableIQR_hpb <- anno(toptableIQR_hpb)
+toptableIQR.cov <- anno(toptableIQR.cov)
+toptableIQR.kopt <- anno(toptableIQR.kopt)
+toptableIQR.hpb <- anno(toptableIQR.hpb)
 
 
-######ORA: Overrepresentation Analysis: GO terms######
+# Comparar los analisis independientes kopt y hpb:
+toptableIQR.kopt.sig <- toptableIQR.kopt[toptableIQR.kopt$adj.P.Val<=0.05,]
+toptableIQR.hpb.sig <- toptableIQR.hpb[toptableIQR.hpb$adj.P.Val<=0.05,]
+a <- rownames(toptableIQR.kopt.sig)
+b <- rownames(toptableIQR.hpb.sig)
+
+intersect_kopt_hpb <- intersect(a, b)
+length(intersect_kopt_hpb) # prints '714'
+rm(a); rm(b)
+toptableIQR.hpb.nsig - length(intersect_kopt_hpb) # prints '1391'
+toptableIQR.kopt.nsig - length(intersect_kopt_hpb) # prints '7051'
+
+##10. Save results
+#save(toptableIQR,file="CellLinesResults.RData")
+#load("/home/guille/Desktop/Omics/microarrays/Trabajo_final/CellLinesResults.RData")
+
+
+
+
+#########Gene Ontology (GO)##########
 
 GO_analysis <- function (genes, universe, ontology){
   clusterProfiler::enrichGO(gene          = genes,
@@ -243,62 +245,64 @@ FC_sign_subsetting <- function(toptable){
   return(res)
 }
 
-# GO tems usando el diseño por bloques:
 
-#~~~~~~Blocking~~~~~~
-toptableIQR_blocking_sig <- toptableIQR_blocking[toptableIQR_blocking$adj.P.Val<=0.05,]
-toptableIQR_blocking_sig_signs <- FC_sign_subsetting(toptableIQR_blocking_sig)
-toptableIQR_blocking_sig_pos <- toptableIQR_blocking_sig_signs[[1]]
-toptableIQR_blocking_sig_neg <- toptableIQR_blocking_sig_signs[[2]]
-rm(toptableIQR_blocking_sig_signs)
+#~~~~~~Covariable~~~~~~
 
-GO_blocking_pos <- GO_analysis(rownames(toptableIQR_blocking_sig_pos), universe, "BP")
-GO_blocking_neg <- GO_analysis(rownames(toptableIQR_blocking_sig_neg), universe, "BP")
+toptableIQR.cov.sig <- toptableIQR.cov[toptableIQR.cov$adj.P.Val<=0.05,]
+toptableIQR.cov.sig.signs <- FC_sign_subsetting(toptableIQR.cov.sig)
+toptableIQR.cov.sig.pos <- toptableIQR.cov.sig.signs[[1]]
+toptableIQR.cov.sig.neg <- toptableIQR.cov.sig.signs[[2]]
+rm(toptableIQR.cov.sig.signs)
 
-jpeg("figuras/GOBP_blocking_pos.jpg", width = 900, height = 600)
-dotplot(GO_blocking_pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation. Blocking KOPT-K1, HPB-ALL")
+GO.cov.pos <- GO_analysis(rownames(toptableIQR.cov.sig.pos), universe, "BP")
+GO.cov.neg <- GO_analysis(rownames(toptableIQR.cov.sig.neg), universe, "BP")
+
+jpeg("figuras/GOBP.cov.pos.jpg", width = 900, height = 600)
+dotplot(GO.cov.pos, showCategory = 10, font.size = 10,title = "GO:BP Upregulation in all cell lines")
 dev.off()
 
-jpeg("figuras/GOBP_blocking_neg.jpg", width = 900, height = 600)
-dotplot(GO_blocking_neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation. Blocking KOPT-K1, HPB-ALL")
+jpeg("figuras/GOBP.cov.neg.jpg", width = 900, height = 600)
+dotplot(GO.cov.neg, showCategory = 10, font.size = 10, title = "GO:BP Upregulation in all cell lines")
 dev.off()
 
 
-# GO terms usando los genes significativos del analisis kopt y hpb:
 
 #~~~~~~KOPT-K1~~~~~~
-toptableIQR_kopt_sig_signs <- FC_sign_subsetting(toptableIQR_kopt_sig)
-toptableIQR_kopt_sig_pos <- toptableIQR_kopt_sig_signs[[1]]
-toptableIQR_kopt_sig_neg <- toptableIQR_kopt_sig_signs[[2]]
-rm(toptableIQR_kopt_sig_signs)
+toptableIQR.kopt.sig.signs <- FC_sign_subsetting(toptableIQR.kopt.sig)
+toptableIQR.kopt.sig.pos <- toptableIQR.kopt.sig.signs[[1]]
+toptableIQR.kopt.sig.neg <- toptableIQR.kopt.sig.signs[[2]]
+rm(toptableIQR.kopt.sig.signs)
 
-GO_kopt_pos <- GO_analysis(rownames(toptableIQR_kopt_sig_pos), universe, "BP")
-GO_kopt_neg <- GO_analysis(rownames(toptableIQR_kopt_sig_neg), universe, "BP")
+GO.kopt.pos <- GO_analysis(rownames(toptableIQR.kopt.sig.pos), universe, "BP")
+GO.kopt.neg <- GO_analysis(rownames(toptableIQR.kopt.sig.neg), universe, "BP")
 
-jpeg("figuras/GOBP_kopt_pos.jpg", width = 900, height = 600)
-dotplot(GO_kopt_pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation KOPT-K1")
+View(toptableIQR.kopt.sig.pos)
+table(is.na(toptableIQR.cov$SYMBOL))
+
+jpeg("figuras/GOBP.kopt.pos.jpg", width = 900, height = 600)
+dotplot(GO.kopt.pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation KOPT-K1")
 dev.off()
 
-jpeg("figuras/GOBP_kopt_neg.jpg", width = 900, height = 600)
-dotplot(GO_kopt_neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation KOPT-K1")
+jpeg("figuras/GOBP.kopt.neg.jpg", width = 900, height = 600)
+dotplot(GO.kopt.neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation KOPT-K1")
 dev.off()
 
 
 #~~~~~~HPB-ALL~~~~~~
-toptableIQR_hpb_sig_signs <- FC_sign_subsetting(toptableIQR_hpb_sig)
-toptableIQR_hpb_sig_pos <- toptableIQR_hpb_sig_signs[[1]]
-toptableIQR_hpb_sig_neg <- toptableIQR_hpb_sig_signs[[2]]
-rm(toptableIQR_hpb_sig_signs)
+toptableIQR.hpb.sig.signs <- FC_sign_subsetting(toptableIQR.hpb.sig)
+toptableIQR.hpb.sig.pos <- toptableIQR.hpb.sig.signs[[1]]
+toptableIQR.hpb.sig.neg <- toptableIQR.hpb.sig.signs[[2]]
+rm(toptableIQR.hpb.sig.signs)
 
-GO_hpb_pos <- GO_analysis(rownames(toptableIQR_hpb_sig_pos), universe, "BP")
-GO_hpb_neg <- GO_analysis(rownames(toptableIQR_hpb_sig_neg), universe, "BP")
+GO.hpb.pos <- GO_analysis(rownames(toptableIQR.hpb.sig.pos), universe, "BP")
+GO.hpb.neg <- GO_analysis(rownames(toptableIQR.hpb.sig.neg), universe, "BP")
 
-jpeg("figuras/GOBP_hpb_pos.jpg", width = 900, height = 600)
-dotplot(GO_hpb_pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation HPB-ALL")
+jpeg("figuras/GOBP.hpb.pos.jpg", width = 900, height = 600)
+dotplot(GO.hpb.pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation HPB-ALL")
 dev.off()
 
-jpeg("figuras/GOBP_hpb_neg.jpg", width = 900, height = 600)
-dotplot(GO_hpb_neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation HPB-ALL")
+jpeg("figuras/GOBP.hpb.neg.jpg", width = 900, height = 600)
+dotplot(GO.hpb.neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation HPB-ALL")
 dev.off()
 
 
@@ -306,24 +310,20 @@ dev.off()
 # GO terms usando la interseccion de kopt y hpb: vademás de los genes
 # de la intersección, necesitamos que tengan el mismo sentido en logFC
 
-intersect_pos <- intersect(rownames(toptableIQR_kopt_sig_pos), rownames(toptableIQR_hpb_sig_pos)) #87
-intersect_neg <- intersect(rownames(toptableIQR_kopt_sig_neg), rownames(toptableIQR_hpb_sig_neg)) #385
-# Esto significa que de los 1110 DEGs de la intersección, sólo comparten el sentido de logFC 472.
+intersect.pos <- intersect(rownames(toptableIQR.kopt.sig.pos), rownames(toptableIQR.hpb.sig.pos)) #45
+intersect.neg <- intersect(rownames(toptableIQR.kopt.sig.neg), rownames(toptableIQR.hpb.sig.neg)) #176
+# Esto significa que de los 714 DEGs de la intersección, sólo comparten el sentido de logFC 221 genes.
 
-GO_intersect_pos <- GO_analysis(intersect_pos, universe, "BP")
-GO_intersect_neg <- GO_analysis(intersect_neg, universe, "BP")
+GO.intersect.pos <- GO_analysis(intersect.pos, universe, "BP")
+GO.intersect.neg <- GO_analysis(intersect.neg, universe, "BP")
 
-jpeg("figuras/GOBP_intersect_pos.jpg", width = 900, height = 600)
-dotplot(GO_intersect_pos, showCategory = 10, font.size = 10, title = "GO:BP Intersect Upregulation KOPT-K1, HPB-ALL")
+jpeg("figuras/GOBP.intersect.pos.jpg", width = 900, height = 600)
+dotplot(GO.intersect.pos, showCategory = 10, font.size = 10, title = "GO:BP Intersect Upregulation KOPT-K1, HPB-ALL")
 dev.off()
 
-jpeg("figuras/GOBP_intersect_neg.jpg", width = 900, height = 600)
-dotplot(GO_intersect_neg, showCategory = 10, font.size = 10, title = "GO:BP Intersect Downregulation KOPT-K1, HPB-ALL")
+jpeg("figuras/GOBP.intersect.neg.jpg", width = 900, height = 600)
+dotplot(GO.intersect.neg, showCategory = 10, font.size = 10, title = "GO:BP Intersect Downregulation KOPT-K1, HPB-ALL")
 dev.off()
-
-
-
-
 
 
 
@@ -333,43 +333,32 @@ dev.off()
 dir.create("./GSEA_files/", showWarnings = FALSE)
 
 #~~~~~~.GCT~~~~~~
-# Vamos a hacer un .gct con los datos de expresión normalizados de todas la muestras
-# También hacemos un subset al expressionset por cell line hacer .gct de cada línea
-eset_kopt <- eset[,c(1:3, 7:9)]
-eset_hpb <- eset[,c(4:6, 10:12)]
-#View(exprs(eset_hpb))
-#View(exprs(eset_hpb))
+# Vamos a hacer un .gct con los datos de expresión normalizados de todas las
+# muestras y de cada línea por separado
 
-output.gct(eset, filename = "./GSEA_files/GSE18198_base.gct")
-output.gct(eset_kopt, filename = "./GSEA_files/GSE18198_kopt")
-output.gct(eset_hpb, filename = "./GSEA_files/GSE18198_hpb")
+
+output.gct(eset, filename = "./GSEA_files/GSE18198_base")
+output.gct(eset.kopt, filename = "./GSEA_files/GSE18198_kopt")
+output.gct(eset.hpb, filename = "./GSEA_files/GSE18198_hpb")
 
 #~~~~~~.RNK~~~~~~
-# Primero vamos a crear el .rnk para el análisis por bloques:
-fit3<-lmFit(eset, design_blocking)
-fit4<-eBayes(fit3)
-toptable_blocking<-topTable(fit4, coef="treat_blockingSAHM1", number=dim(exprs(eset))[1], adjust.method="BH", sort.by="p")
-rm(fit3); rm(fit4)
+# Primero vamos a crear el .rnk para el análisis con covariable.
+# Para gsea, usamos los datos sin filtrar
+fit2 <- lmFit(eset, design.cov)
+fit2 <- eBayes(fit2)
+toptable.cov.gsea <-topTable(fit2, coef="treat.covSAHM1", number=dim(exprs(eset))[1], adjust.method="BH", sort.by="p")
+rm(fit2)
 
-# Vamos a crear el fichero .rnk comparando todos los genes para la comparación
-# de líneas, para ello sacamos topTable con todos los genes
-res_rnk <- deg(eset, design, cont.matrix_lines)
-toptable_rnk <- res_rnk[[1]]
-toptable_rnk_nsig <- res_rnk[[2]]
-rm(res_rnk)
-
-
-
-#Vamos a utilizar como métrica para el ranking el adjpval,
-#pero teniendo en cuenta el sentido de la expresión diferencial
+# Vamos a utilizar como métrica para el ranking el adjpval,
+# pero teniendo en cuenta el sentido de la expresión diferencial
 
 output.rnk <- function(toptable, file_path){
   x <- toptable[,c("adj.P.Val","logFC")]
-  x$name<-rownames(toptable)
+  x$name <- rownames(toptable)
   x <- x[,c(3,1,2)]
-  x$logP=-log10(x$adj.P.Val)
-  x$sign<-sign(x$logFC)
-  x$metric<-(x$logP/x$sign)
+  x$logP = -log10(x$adj.P.Val)
+  x$sign <- sign(x$logFC)
+  x$metric <- (x$logP/x$sign)
   
   y<-x[,c("name", "metric")]
   write.table(y, file = file_path,
@@ -378,32 +367,26 @@ output.rnk <- function(toptable, file_path){
   return(y)
 }
 
-rnk_table <- output.rnk(toptable_rnk, "GSEA_files/GSE18198_cells.rnk")
+output.rnk(toptable.cov.gsea, "GSEA_files/GSE18198_cov.rnk")
 
 
 #~~~~~~~~~.CLS~~~~~~~~~
-#Ahora vamos a generar los .cls de cada linea celular:
-treat_labels <- c(rep("DMSO", 6), rep("SAHM1", 6))
-cell_labels <- c(rep("KOPT-K1", 3), rep("HPB-ALL", 3), rep("KOPT-K1", 3), rep("HPB-ALL", 3))
-phenoData(eset)$treat <- treat_labels
-phenoData(eset)$cell_line <- cell_labels
-esetpd <- pData(eset)
-esetpd_kopt <- esetpd[esetpd$cell_line=="KOPT-K1",]
-esetpd_hpb <- esetpd[esetpd$cell_line=="HPB-ALL",]
 
+# Ahora vamos a generar los .cls de cada linea celular:
+# En ambos casos tenemos 3 controles seguidos de 3 ttos, nos vale el mismo .cls
+treat.labels <- c(rep("DMSO", 3), rep("SAHM1", 3))
+phenoData(eset.kopt)$treat <- treat.labels
+esetpd.gsea <- pData(eset.kopt)
 
-output.cls(target = esetpd_kopt,
+output.cls(target = esetpd.gsea,
            variable = "treat",
-           filename = "./GSEA_files/GSE18198_kopt")
-output.cls(target = esetpd_kopt,
-           variable = "treat",
-           filename = "./GSEA_files/GSE18198_hpb")
+           filename = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/GSEA_files/GSE18198_single_cell_line")
 
 #~~~~~~~~~.CHIP~~~~~~~~~
 #Vamos a crear el fichero .chip. Primero, anotamos todos los genes,
 #por ejemplo, usando toptable_rnk
 
-toptable_rnk <- anno(toptable_rnk)
+toptable.cov.gsea <- anno(toptable.cov.gsea)
 
 output.chip <- function(toptable, file_path){
   chip <- as.data.frame(toptable[,"SYMBOL"])
@@ -418,5 +401,9 @@ output.chip <- function(toptable, file_path){
   return(chip)
 }
 
-chip <- output.chip(toptable_rnk, "GSEA_files/GSE18198_base.chip")
+output.chip(toptable.cov.gsea, "GSEA_files/GSE18198.chip")
 
+###########Clustering###############
+
+write.table(exprs(eset), file = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/samples_clustering/ematrix.txt")
+test <- read.table("samples_clustering/ematrix.txt")

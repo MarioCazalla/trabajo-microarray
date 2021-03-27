@@ -1,0 +1,24 @@
+producer_class	xtools.gsea.GseaPreranked
+producer_timestamp	1616847028885
+param	rpt_label	cov_c3.tft_preranked
+param	rnd_seed	timestamp
+param	set_min	15
+param	chip	/home/guille/Desktop/trabajo-microarray/GSEA_files/GSE18198.chip
+param	zip_report	false
+param	create_svgs	false
+param	scoring_scheme	weighted
+param	rnk	/home/guille/Desktop/trabajo-microarray/GSEA_files/GSE18198_cov.rnk
+param	norm	meandiv
+param	out	/home/guille/gsea_home/output/mar27
+param	mode	Max_probe
+param	include_only_symbols	true
+param	help	false
+param	set_max	500
+param	gmx	/home/guille/Desktop/trabajo-microarray/GSEA_files/CUSTOM.c3.tft.v7.3.symbols.gmt
+param	make_sets	true
+param	plot_top_x	20
+param	gui	false
+param	nperm	1000
+param	collapse	Collapse
+
+file	/home/guille/gsea_home/output/mar27/cov_c3.tft_preranked.GseaPreranked.1616847028885/index.html

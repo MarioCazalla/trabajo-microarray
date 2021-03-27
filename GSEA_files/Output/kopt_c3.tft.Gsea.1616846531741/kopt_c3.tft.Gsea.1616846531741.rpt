@@ -1,0 +1,34 @@
+producer_class	xtools.gsea.Gsea
+producer_timestamp	1616846531741
+param	zip_report	false
+param	num	100
+param	scoring_scheme	weighted
+param	norm	meandiv
+param	out	/home/guille/gsea_home/output/mar27
+param	mode	Max_probe
+param	include_only_symbols	true
+param	set_max	500
+param	gmx	/home/guille/Desktop/trabajo-microarray/GSEA_files/CUSTOM.c3.tft.v7.3.symbols.gmt
+param	plot_top_x	20
+param	nperm	1000
+param	order	descending
+param	rpt_label	kopt_c3.tft
+param	rnd_seed	timestamp
+param	set_min	15
+param	res	/home/guille/Desktop/trabajo-microarray/GSEA_files/GSE18198_kopt.gct
+param	chip	/home/guille/Desktop/trabajo-microarray/GSEA_files/GSE18198.chip
+param	create_svgs	false
+param	cls	/home/guille/Desktop/trabajo-microarray/GSEA_files/GSE18198_single_cell_line.cls#SAHM1_versus_DMSO
+param	sort	real
+param	create_gcts	false
+param	help	false
+param	save_rnd_lists	false
+param	median	false
+param	metric	Signal2Noise
+param	make_sets	true
+param	rnd_type	no_balance
+param	gui	false
+param	permute	gene_set
+param	collapse	Collapse
+
+file	/home/guille/gsea_home/output/mar27/kopt_c3.tft.Gsea.1616846531741/index.html
