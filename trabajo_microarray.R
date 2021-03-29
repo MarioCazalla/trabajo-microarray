@@ -10,11 +10,16 @@ library(Biobase)
 library(GEOquery)
 library(annotate)
 library(hgu133plus2.db)
+library(org.Hs.eg.db)
 
 library(topGO)
 library(clusterProfiler)
 library(ggplot2)
 library(stringr)
+library(rrvgo)
+
+library(pathview)
+library(ReactomePA)
 
 #2. Import targets.txt file. generates a data frame:
 targets <- readTargets("targets.txt", row.names="FileName")
@@ -121,7 +126,9 @@ get.boxplots(eset.hpb, data.hpb)
 rm(data, data.hpb, data.kopt)
 
 
-#######Differential expression analysis.#######
+
+################ Differential expression analysis ##################
+####################################################################
 
 #7. Design matrix.
 # Para el análisis con tipo celular como covariable:
@@ -186,14 +193,19 @@ anno <- function(toptable){
   
   GENE_SYMBOLS <- AnnotationDbi::select(hgu133plus2.db, keys=affy_IDs, columns="SYMBOL", keytype="PROBEID")
   ENSEMBL_IDs <-AnnotationDbi::select(hgu133plus2.db, keys=affy_IDs, columns="ENSEMBL", keytype="PROBEID")
+  ENTREZ_IDs <-AnnotationDbi::select(hgu133plus2.db, keys=affy_IDs, columns="ENTREZID", keytype="PROBEID")
+  
   
   GENE_SYMBOLS = GENE_SYMBOLS[!duplicated(GENE_SYMBOLS["PROBEID"]),]
   ENSEMBL_IDs = ENSEMBL_IDs[!duplicated(ENSEMBL_IDs["PROBEID"]),]
+  ENTREZ_IDs = ENTREZ_IDs[!duplicated(ENTREZ_IDs["PROBEID"]),]
+  
   
   toptable$SYMBOL <- GENE_SYMBOLS$SYMBOL
   toptable$ENSEMBL <- ENSEMBL_IDs$ENSEMBL
+  toptable$ENTREZ <- ENTREZ_IDs$ENTREZID
   toptable$rank <- c(1:nrow(toptable))
-  toptable<-toptable[, c(9,8,7,1,2,3,4,5,6)]
+  toptable<-toptable[, c(10,9,8,7,1,2,3,4,5,6)]
   
   return(toptable)
 }
@@ -215,17 +227,13 @@ rm(a); rm(b)
 toptableIQR.hpb.nsig - length(intersect_kopt_hpb) # prints '1391'
 toptableIQR.kopt.nsig - length(intersect_kopt_hpb) # prints '7051'
 
-##10. Save results
-#save(toptableIQR,file="CellLinesResults.RData")
-#load("/home/guille/Desktop/Omics/microarrays/Trabajo_final/CellLinesResults.RData")
 
 
-
-
-#########Gene Ontology (GO)##########
+############# GeneOntology: BiologicalProcess (GO:BP) ##############
+####################################################################
 
 GO_analysis <- function (genes, universe, ontology){
-  clusterProfiler::enrichGO(gene          = genes,
+  clusterProfiler::enrichGO(gene = genes,
            universe      = universe,
            OrgDb         = hgu133plus2.db,
            keyType       = 'PROBEID',
@@ -255,7 +263,9 @@ toptableIQR.cov.sig.neg <- toptableIQR.cov.sig.signs[[2]]
 rm(toptableIQR.cov.sig.signs)
 
 GO.cov.pos <- GO_analysis(rownames(toptableIQR.cov.sig.pos), universe, "BP")
+GO.cov.pos.df <- as.data.frame(GO.cov.pos)
 GO.cov.neg <- GO_analysis(rownames(toptableIQR.cov.sig.neg), universe, "BP")
+GO.cov.neg.df <- as.data.frame(GO.cov.neg)
 
 jpeg("figuras/GOBP.cov.pos.jpg", width = 900, height = 600)
 dotplot(GO.cov.pos, showCategory = 10, font.size = 10,title = "GO:BP Upregulation in all cell lines")
@@ -274,7 +284,9 @@ toptableIQR.kopt.sig.neg <- toptableIQR.kopt.sig.signs[[2]]
 rm(toptableIQR.kopt.sig.signs)
 
 GO.kopt.pos <- GO_analysis(rownames(toptableIQR.kopt.sig.pos), universe, "BP")
+GO.kopt.pos.df <- as.data.frame(GO.kopt.pos)
 GO.kopt.neg <- GO_analysis(rownames(toptableIQR.kopt.sig.neg), universe, "BP")
+GO.kopt.neg.df <- as.data.frame(GO.kopt.neg)
 
 View(toptableIQR.kopt.sig.pos)
 table(is.na(toptableIQR.cov$SYMBOL))
@@ -295,7 +307,9 @@ toptableIQR.hpb.sig.neg <- toptableIQR.hpb.sig.signs[[2]]
 rm(toptableIQR.hpb.sig.signs)
 
 GO.hpb.pos <- GO_analysis(rownames(toptableIQR.hpb.sig.pos), universe, "BP")
+GO.hpb.pos.df <- as.data.frame(GO.hpb.pos)
 GO.hpb.neg <- GO_analysis(rownames(toptableIQR.hpb.sig.neg), universe, "BP")
+GO.hpb.neg.df <- as.data.frame(GO.hpb.neg)
 
 jpeg("figuras/GOBP.hpb.pos.jpg", width = 900, height = 600)
 dotplot(GO.hpb.pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation HPB-ALL")
@@ -315,7 +329,9 @@ intersect.neg <- intersect(rownames(toptableIQR.kopt.sig.neg), rownames(toptable
 # Esto significa que de los 714 DEGs de la intersección, sólo comparten el sentido de logFC 221 genes.
 
 GO.intersect.pos <- GO_analysis(intersect.pos, universe, "BP")
+GO.intersect.pos.df <- as.data.frame(GO.intersect.pos)
 GO.intersect.neg <- GO_analysis(intersect.neg, universe, "BP")
+GO.intersect.neg.df <- as.data.frame(GO.intersect.neg)
 
 jpeg("figuras/GOBP.intersect.pos.jpg", width = 900, height = 600)
 dotplot(GO.intersect.pos, showCategory = 10, font.size = 10, title = "GO:BP Intersect Upregulation KOPT-K1, HPB-ALL")
@@ -325,9 +341,43 @@ jpeg("figuras/GOBP.intersect.neg.jpg", width = 900, height = 600)
 dotplot(GO.intersect.neg, showCategory = 10, font.size = 10, title = "GO:BP Intersect Downregulation KOPT-K1, HPB-ALL")
 dev.off()
 
+########################## GO clustering ############################
+# calculateSimMatrix() calcula la similaridad semántica de los GO terms:
 
+go_clustering <- function(GO_BP_df){
+  # Matriz con la similitud entre todas las combinaciones de GO:BP terms
+  simMatrix <- calculateSimMatrix(GO_BP_df$ID,
+                                  orgdb="org.Hs.eg.db",
+                                  ont="BP",
+                                  method="Rel")
+  
+  # reduceSimMatrix() agrupa los GO terms en función de la similaridad
+  # Primero vamos a asignar scores a los GO terms en función de su significancia estadística:
+  scores <- setNames(-log10(GO_BP_df$qvalue), GO_BP_df$ID)
+  # Ahora hacemos el clustering:
+  reducedTerms <- reduceSimMatrix(simMatrix,
+                                  scores,
+                                  threshold=0.7,
+                                  orgdb="org.Hs.eg.db")
+  
+  #Vamos a verlo representado:
+  jpeg(paste("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/figuras/GO_clusters/", as.character(deparse(substitute(GO_BP_df))), ".jpg", sep = ""),
+       res = 300, width = 4000, height = 4000)
+  print(treemapPlot(reducedTerms))
+  dev.off()
+}
 
-######Preparing GSEA input files######
+go_clustering(GO.cov.pos.df)
+go_clustering(GO.cov.neg.df)
+go_clustering(GO.kopt.pos.df)
+go_clustering(GO.kopt.neg.df)
+go_clustering(GO.hpb.pos.df)
+go_clustering(GO.hpb.neg.df)
+go_clustering(GO.intersect.pos.df)
+go_clustering(GO.intersect.neg.df)
+
+########################### GSEA files #############################
+####################################################################
 
 #Crea el directorio 'GSEA_files' en caso de que no exista
 dir.create("./GSEA_files/", showWarnings = FALSE)
@@ -403,7 +453,142 @@ output.chip <- function(toptable, file_path){
 
 output.chip(toptable.cov.gsea, "GSEA_files/GSE18198.chip")
 
-###########Clustering###############
 
-write.table(exprs(eset), file = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/samples_clustering/ematrix.txt")
-test <- read.table("samples_clustering/ematrix.txt")
+
+######################### KEGG pathways ############################
+####################################################################
+
+# Buscamos pathways enriquecidas significativas
+
+kegg.cov <- enrichKEGG(toptableIQR.cov$ENTREZ,
+                       organism = "hsa",
+                       keyType = "ncbi-geneid",
+                       pvalueCutoff = 0.05,
+                       pAdjustMethod = "BH",
+                       universe = unique(toptable.cov.gsea$ENTREZ),
+                       minGSSize = 10,
+                       maxGSSize = 500,
+                       qvalueCutoff = 0.2,
+                       use_internal_data = FALSE) # usa la db online más reciente
+
+kegg.cov.df <- as.data.frame(kegg.cov) # df con los resultados significativos
+
+
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/")
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~Pathview~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Pathview necesita una matriz numerica con los entrezids como rownames
+# y las muestras como colnames.
+
+# Tomamos los datos de la tabla de gsea, que es la que no ha sido filtrada
+pathview_df.cov <- toptable.cov.gsea[, c("ENTREZ", "logFC", "adj.P.Val")]
+pathview_df.cov <- pathview_df.cov[!is.na(pathview_df.cov$ENTREZ),]
+pathview_df.cov <- pathview_df.cov[!duplicated(pathview_df.cov$ENTREZ),]
+pathview_df.cov$sig <- NA # creamos una columna vacía que luego rellenaremos
+
+# Quitamos esta pathway porque da error con pathview:
+kegg.cov.df <- kegg.cov.df[-which(kegg.cov.df$ID=="hsa05206"),]
+
+# Esta función crea una columna adicional que pathview leerá como una segunda
+# muestra, pero en realidad nos va a indicar la significancia (valor rojo, >0)
+# o la no significancia (valor blanco, ==0).
+# Además, el valor positivo para los significantes lo toma del mayor logFC en
+# valor absoluto del conjunto de genes que forman cada una de las rutas, para
+# evitar modificar el rango de expresión de dichos genes y mantener la escala
+# de colores original.
+
+kegg_exprs_sig <- function(kegg_df){
+  
+for(i in 1:length(kegg_df[,"geneID"])){
+  print("#########GENERATING PATHWAY##########")
+  a <- unlist(strsplit(kegg_df[i,"geneID"], split = "/"))
+  
+  # Sacar el máximo logFC de pathview_df.cov de cada grupo de genes:
+  maxi <- -Inf
+  for(j in a){
+    if(abs(pathview_df.cov[pathview_df.cov["ENTREZ"]==j,"logFC"]) > maxi){
+      maxi <- abs(pathview_df.cov[pathview_df.cov["ENTREZ"]==j,"logFC"])}
+  }
+  
+  # Si el padj es significativo, entonces le mete maxi, si no, un 0
+  for(k in 1:length(pathview_df.cov$adj.P.Val)){
+    if(pathview_df.cov$adj.P.Val[k] < 0.05){
+      pathview_df.cov$sig[k] <- maxi
+    }
+    else{
+      pathview_df.cov$sig[k] <- 0
+    }
+  }
+  
+  # Convertir a matrix y darle el formato que requiere pathview
+  pathview_matrix.cov <- as.matrix(pathview_df.cov)
+  pathview_matrix.cov <- pathview_matrix.cov[,-c(1,3)]
+  pathview_matrix.cov <- apply(pathview_matrix.cov, 2, as.numeric)
+  row.names(pathview_matrix.cov) <- pathview_df.cov$ENTREZ
+  
+  # Sacamos la pathway:
+  pathview(gene.data = pathview_matrix.cov,
+           pathway.id = kegg_df[i,"ID"],
+           species = "hsa",
+           gene.idtype = "entrez",
+           kegg.dir = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/kegg_data/",
+           low = "green", mid = "white", high = "red", na.col = "grey",
+           multi.state = T, same.layer = T)
+}
+rm(a, i, j, k, maxi)
+}
+
+# Corremos la función con las pathways significativas de enrichKEGG()
+kegg_exprs_sig(kegg.cov.df)
+
+
+# Manualmente miramos rutas reguladas por NOTCH1 o importantes en cáncer.
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/others/")
+
+manpaths <- c("hsa04151", #PI3K-AKT
+              "hsa04010", #MAPK
+              "hsa05230", #Central carbon metabolism in cancer
+              "hsa04612", #Antigen processing and presentation
+              "hsa05235", #PD-L1 expression and PD-1 checkpoint pathway in cancer
+              "hsa04110", #Cell cycle
+              "hsa04210") #Apoptosis
+
+kegg.cov.others.df <- kegg.cov@result[kegg.cov@result[,"ID"] %in% manpaths, ]
+kegg_exprs_sig(kegg.cov.others.df)
+
+# Estas rutas no aparecen ni siquiera como no significativas en los resultados,
+# pero visto los resultados de GO:BP, decidimos mirarlas
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/others2/all_genes/")
+
+manpaths2 <- c("hsa00230", #Purine metabolism
+               "hsa00240", #Pirimidine metabolism
+               "hsa00190", #Oxidative phosphorylation
+               "hsa03030", #DNA replication 
+               "hsa05200") #Pathways in cancer
+
+# Con todos los genes, significantes y no significantes
+for(i in manpaths2){
+  pathview(gene.data = pathview_matrix.cov[,1],
+           pathway.id = i,
+           species = "hsa",
+           gene.idtype = "entrez",
+           kegg.dir = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/kegg_data/",
+           low = "green", mid = "white", high = "red", na.col = "grey")
+}
+
+#Sólo con los genes significantes
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/others2/significant_genes/")
+
+manpaths2.sig <- toptable.cov.gsea[toptable.cov.gsea$adj.P.Val<0.05,"logFC"]
+names(manpaths2.sig) <- toptable.cov.gsea[toptable.cov.gsea$adj.P.Val<0.05,"ENTREZ"]
+
+for(i in manpaths2){
+  pathview(gene.data = pathview_matrix.cov[,1],
+           pathway.id = i,
+           species = "hsa",
+           gene.idtype = "entrez",
+           kegg.dir = "/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/kegg_data/",
+           low = "green", mid = "white", high = "red", na.col = "grey")
+}
