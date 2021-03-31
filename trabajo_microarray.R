@@ -17,9 +17,8 @@ library(clusterProfiler)
 library(ggplot2)
 library(stringr)
 library(rrvgo)
-
 library(pathview)
-library(ReactomePA)
+
 
 #2. Import targets.txt file. generates a data frame:
 targets <- readTargets("targets.txt", row.names="FileName")
@@ -78,10 +77,7 @@ esetIQR.hpb <- iqr.filtering(eset.hpb)
 ###### PCA analysis ######
 
 library(PCAtools)
-
 pca <- pca(ematrix, metadata = esetpd)
-pca.kopt <- pca(ematrix.kopt, metadata = esetpd.kopt)
-pca.hpb <- pca(ematrix.hpb, metadata = esetpd.hpb)
 
 get.pca.plots <- function(pcaobj){
   
@@ -95,9 +91,7 @@ get.pca.plots <- function(pcaobj){
 }
 
 get.pca.plots(pca)
-get.pca.plots(pca.kopt)
-get.pca.plots(pca.hpb)
-rm(pca, pca.hpb, pca.kopt)
+rm(pca)
 
 #5. Generate BOXPLOTS before and after normalization
 
@@ -267,16 +261,6 @@ GO.cov.pos.df <- as.data.frame(GO.cov.pos)
 GO.cov.neg <- GO_analysis(rownames(toptableIQR.cov.sig.neg), universe, "BP")
 GO.cov.neg.df <- as.data.frame(GO.cov.neg)
 
-jpeg("figuras/GOBP.cov.pos.jpg", width = 900, height = 600)
-dotplot(GO.cov.pos, showCategory = 10, font.size = 10,title = "GO:BP Upregulation in all cell lines")
-dev.off()
-
-jpeg("figuras/GOBP.cov.neg.jpg", width = 900, height = 600)
-dotplot(GO.cov.neg, showCategory = 10, font.size = 10, title = "GO:BP Upregulation in all cell lines")
-dev.off()
-
-
-
 #~~~~~~KOPT-K1~~~~~~
 toptableIQR.kopt.sig.signs <- FC_sign_subsetting(toptableIQR.kopt.sig)
 toptableIQR.kopt.sig.pos <- toptableIQR.kopt.sig.signs[[1]]
@@ -287,18 +271,6 @@ GO.kopt.pos <- GO_analysis(rownames(toptableIQR.kopt.sig.pos), universe, "BP")
 GO.kopt.pos.df <- as.data.frame(GO.kopt.pos)
 GO.kopt.neg <- GO_analysis(rownames(toptableIQR.kopt.sig.neg), universe, "BP")
 GO.kopt.neg.df <- as.data.frame(GO.kopt.neg)
-
-View(toptableIQR.kopt.sig.pos)
-table(is.na(toptableIQR.cov$SYMBOL))
-
-jpeg("figuras/GOBP.kopt.pos.jpg", width = 900, height = 600)
-dotplot(GO.kopt.pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation KOPT-K1")
-dev.off()
-
-jpeg("figuras/GOBP.kopt.neg.jpg", width = 900, height = 600)
-dotplot(GO.kopt.neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation KOPT-K1")
-dev.off()
-
 
 #~~~~~~HPB-ALL~~~~~~
 toptableIQR.hpb.sig.signs <- FC_sign_subsetting(toptableIQR.hpb.sig)
@@ -311,35 +283,6 @@ GO.hpb.pos.df <- as.data.frame(GO.hpb.pos)
 GO.hpb.neg <- GO_analysis(rownames(toptableIQR.hpb.sig.neg), universe, "BP")
 GO.hpb.neg.df <- as.data.frame(GO.hpb.neg)
 
-jpeg("figuras/GOBP.hpb.pos.jpg", width = 900, height = 600)
-dotplot(GO.hpb.pos, showCategory = 10, font.size = 10, title = "GO:BP Upregulation HPB-ALL")
-dev.off()
-
-jpeg("figuras/GOBP.hpb.neg.jpg", width = 900, height = 600)
-dotplot(GO.hpb.neg, showCategory = 10, font.size = 10, title = "GO:BP Downregulation HPB-ALL")
-dev.off()
-
-
-#~~~~~~Intersect~~~~~~
-# GO terms usando la interseccion de kopt y hpb: vademás de los genes
-# de la intersección, necesitamos que tengan el mismo sentido en logFC
-
-intersect.pos <- intersect(rownames(toptableIQR.kopt.sig.pos), rownames(toptableIQR.hpb.sig.pos)) #45
-intersect.neg <- intersect(rownames(toptableIQR.kopt.sig.neg), rownames(toptableIQR.hpb.sig.neg)) #176
-# Esto significa que de los 714 DEGs de la intersección, sólo comparten el sentido de logFC 221 genes.
-
-GO.intersect.pos <- GO_analysis(intersect.pos, universe, "BP")
-GO.intersect.pos.df <- as.data.frame(GO.intersect.pos)
-GO.intersect.neg <- GO_analysis(intersect.neg, universe, "BP")
-GO.intersect.neg.df <- as.data.frame(GO.intersect.neg)
-
-jpeg("figuras/GOBP.intersect.pos.jpg", width = 900, height = 600)
-dotplot(GO.intersect.pos, showCategory = 10, font.size = 10, title = "GO:BP Intersect Upregulation KOPT-K1, HPB-ALL")
-dev.off()
-
-jpeg("figuras/GOBP.intersect.neg.jpg", width = 900, height = 600)
-dotplot(GO.intersect.neg, showCategory = 10, font.size = 10, title = "GO:BP Intersect Downregulation KOPT-K1, HPB-ALL")
-dev.off()
 
 ########################## GO clustering ############################
 # calculateSimMatrix() calcula la similaridad semántica de los GO terms:
@@ -373,8 +316,7 @@ go_clustering(GO.kopt.pos.df)
 go_clustering(GO.kopt.neg.df)
 go_clustering(GO.hpb.pos.df)
 go_clustering(GO.hpb.neg.df)
-go_clustering(GO.intersect.pos.df)
-go_clustering(GO.intersect.neg.df)
+
 
 ########################### GSEA files #############################
 ####################################################################
@@ -474,10 +416,9 @@ kegg.cov <- enrichKEGG(toptableIQR.cov$ENTREZ,
 kegg.cov.df <- as.data.frame(kegg.cov) # df con los resultados significativos
 
 
-setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/")
-
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~Pathview~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/")
 
 # Pathview necesita una matriz numerica con los entrezids como rownames
 # y las muestras como colnames.
@@ -565,10 +506,9 @@ setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/others2/al
 manpaths2 <- c("hsa00230", #Purine metabolism
                "hsa00240", #Pirimidine metabolism
                "hsa00190", #Oxidative phosphorylation
-               "hsa03030", #DNA replication 
-               "hsa05200") #Pathways in cancer
-
-# Con todos los genes, significantes y no significantes
+               "hsa03030") #DNA replication 
+               
+# a) Con todos los genes, significantivos y no significantes
 for(i in manpaths2){
   pathview(gene.data = pathview_matrix.cov[,1],
            pathway.id = i,
@@ -578,7 +518,7 @@ for(i in manpaths2){
            low = "green", mid = "white", high = "red", na.col = "grey")
 }
 
-#Sólo con los genes significantes
+# b) Sólo con los genes significativos
 setwd("/home/guille/Desktop/Omics/microarrays/trabajo-microarray/kegg/others2/significant_genes/")
 
 manpaths2.sig <- toptable.cov.gsea[toptable.cov.gsea$adj.P.Val<0.05,"logFC"]
